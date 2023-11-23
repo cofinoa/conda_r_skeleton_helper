@@ -69,18 +69,36 @@ with open('packages.txt', 'r') as f:
    packages = [x.strip() for x in packages]
 
 for fn in packages:
-
+    
     if not fn:
+        continue
+    if fn.startswith("#"):
         continue
 
     sys.stdout.write('Processing %s\n'%(fn))
-
+    
+    fn, sep, fn_url = fn.partition(" ")
+    fn = fn.strip()
+    if fn_url:
+        git_url, sep, git_tag = fn_url.partition("@")
+        git_url = git_url.strip()
+        if git_tag:
+            git_tag = git_tag.strip()
+    
     if os.path.exists(fn):
         sys.stderr.write('Skipping %s b/c directory already exists\n'%(fn))
         continue
-
+    
     # Create the recipe using the cran skeleton
-    sp.run(['conda', 'skeleton', 'cran', '--use-noarch-generic', '--add-cross-r-base', fn])
+    if fn_url:
+        if not git_tag:
+            sp.run(['conda', 'skeleton', 'cran', '--use-noarch-generic', '--add-cross-r-base', git_url])
+        else:
+            sp.run(['conda', 'skeleton', 'cran', '--use-noarch-generic', '--add-cross-r-base', '--git-tag', git_tag ,git_url])
+    else:
+        sp.run(['conda', 'skeleton', 'cran', '--use-noarch-generic', '--add-cross-r-base', fn])
+
+
 
     # Edit meta.yaml -------------------------------------------------------------
 
@@ -157,5 +175,6 @@ for fn in packages:
     # If available, open file for optional manual editing with gedit. Not worth
     # using the more cross-platform file.edit, because by default on Linux that
     # would open the file in vim, which would cause more trouble than help.
-    if shutil.which('gedit'):
-        sp.run(['gedit', meta_fname])
+    #if shutil.which('gedit'):
+    #    sp.run(['gedit', meta_fname])
+    sys.stdout.write('DONE: %s\n'%(fn))
