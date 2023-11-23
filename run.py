@@ -90,14 +90,13 @@ for fn in packages:
         continue
     
     # Create the recipe using the cran skeleton
-    if fn_url:
+    if not fn_url:
+        sp.run(['conda', 'skeleton', 'cran', '--use-noarch-generic', '--add-cross-r-base', fn])
+    else:
         if not git_tag:
             sp.run(['conda', 'skeleton', 'cran', '--use-noarch-generic', '--add-cross-r-base', git_url])
         else:
             sp.run(['conda', 'skeleton', 'cran', '--use-noarch-generic', '--add-cross-r-base', '--git-tag', git_tag ,git_url])
-    else:
-        sp.run(['conda', 'skeleton', 'cran', '--use-noarch-generic', '--add-cross-r-base', fn])
-
 
 
     # Edit meta.yaml -------------------------------------------------------------
