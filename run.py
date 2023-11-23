@@ -43,10 +43,10 @@ if not re.match('^3.+', conda_build_version):
     sys.stderr.write('Run: conda install -c conda-forge conda-build\n')
     sys.exit(1)
 
-v_min = StrictVersion('3.17.2')
+v_min = StrictVersion('3.21.6')
 if StrictVersion(conda_build_version) < v_min:
-    sys.stderr.write('You need to install conda-build 3.17.2 or later.\n')
-    sys.stderr.write('Currently installed version: %s\n'%(conda_build_version))
+    sys.stderr.write('You need to install conda-build 3.21.6 or later.\n')
+    sys.stderr.write(f'Currently installed version: {conda_build_version}\n')
     sys.stderr.write('Run: conda install -c conda-forge conda-build\n')
     sys.exit(1)
 
@@ -63,6 +63,11 @@ if not os.path.isfile('extra.yaml'):
     sys.exit(1)
 
 # Process packages -------------------------------------------------------------
+
+SPDX_url = 'https://conda-forge.org/docs/maintainer/adding_pkgs.html#spdx-identifiers-and-expressions'
+with open('spdx-licenses.txt') as f:
+    SPDX_licenses = [line.strip() for line in f]
+SPDX_regex = re.compile(r'^\s+license: +(.+)\s*')
 
 with open('packages.txt', 'r') as f:
    packages = f.readlines()
@@ -84,20 +89,19 @@ for fn in packages:
         git_url = git_url.strip()
         if git_tag:
             git_tag = git_tag.strip()
-    
+
     if os.path.exists(fn):
-        sys.stderr.write('Skipping %s b/c directory already exists\n'%(fn))
+        sys.stderr.write(f'Skipping {fn} b/c directory already exists\n')
         continue
     
     # Create the recipe using the cran skeleton
     if not fn_url:
-        sp.run(['conda', 'skeleton', 'cran', '--use-noarch-generic', '--add-cross-r-base', fn])
+        sp.run(['conda', 'skeleton', 'cran', '--use-noarch-generic', '--add-cross-r-base', '--no-comments', '--allow-archived', fn])
     else:
         if not git_tag:
-            sp.run(['conda', 'skeleton', 'cran', '--use-noarch-generic', '--add-cross-r-base', git_url])
+            sp.run(['conda', 'skeleton', 'cran', '--use-noarch-generic', '--add-cross-r-base', '--no-comments', '--allow-archived', git_url])
         else:
-            sp.run(['conda', 'skeleton', 'cran', '--use-noarch-generic', '--add-cross-r-base', '--git-tag', git_tag ,git_url])
-
+            sp.run(['conda', 'skeleton', 'cran', '--use-noarch-generic', '--add-cross-r-base', '--no-comments', '--allow-archived', '--git-tag', git_tag ,git_url])
 
     # Edit meta.yaml -------------------------------------------------------------
 
@@ -109,17 +113,25 @@ for fn in packages:
 
         for line in f:
             # Extract CRAN metadata
-            if "original CRAN metadata" in line:
+            if line[:11] == '# Package: ':
                 is_cran_metadata = True
             if is_cran_metadata and re.match('^#\s[A-Z]\S+:', line):
                 cran_metadata += line
-
-            # Remove comments and blank lines
-            if re.match('^\s*#', line) or re.match('^\n$', line):
                 continue
 
-            # Remove '+ file LICENSE' or '+ file LICENCE'
-            line = re.sub(' [+|] file LICEN[SC]E', '', line)
+            # Remove blank lines
+            if re.match('^\n$', line):
+                continue
+
+            # Changing GPL-2 to GPL-2.0-only
+            line = re.sub('license: GPL-2$', 'license: GPL-2.0-only', line)
+
+            # Checking for valid SPDX license
+            if SPDX_regex.match(line):
+                license = SPDX_regex.match(line).group(1)
+                if not license in SPDX_licenses:
+                    msg = f'Warning: "{license}" license not valid. See {SPDX_url}\n'
+                    sys.stderr.write(msg)
 
             # Add a blank line before a new section
             line = re.sub('^[a-z]', '\n\g<0>', line)
@@ -154,10 +166,6 @@ for fn in packages:
 
             # Remove line that filters DESCRIPTION with grep
             if re.match('.*grep -va* \'\\^Priority: \' DESCRIPTION.old > DESCRIPTION', line):
-                continue
-
-            # Remove comments (but not shebang line)
-            if re.match('^#\\s', line):
                 continue
 
             # Remove empty lines
